@@ -8,6 +8,7 @@ import { FaCloudUploadAlt, FaRobot, FaCamera, FaStop } from 'react-icons/fa';
 import { BsFillRecordFill } from "react-icons/bs";
 import { IoMdDownload } from "react-icons/io";
 import { RiScreenshot2Line } from "react-icons/ri";
+import * as params from './params';
 
 
 function App() {
@@ -59,25 +60,68 @@ function App() {
         // adjust canvas dimensions to match video dimensions
         canvasRef.current.width = videoWidth;
         canvasRef.current.height = videoHeight;
-
         //clear any previous drawings on canvas
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
         // Loop through each detected pose and draw it on the canvas
         poses.forEach((pose) => {
-          pose.keypoints.forEach((keypoint) => {
-            const { x, y } = keypoint;
-            const circleColor = 'red';
-            ctx.fillStyle = circleColor;
-            ctx.beginPath();
-            ctx.arc(x, y, 2, 0, 2 * Math.PI);
-            ctx.fill();
-          });
+          
+          drawPoseSkeleton(ctx, pose);
+          drawPoseKeypoints(ctx, pose);
+
         });
       }
     }
   };
 
+  const drawPoseSkeleton = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
+    // Styles
+    ctx.fillStyle = "white";
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = params.DEFAULT_LINE_WIDTH;
+    
+    const keypoints = pose["keypoints"];
+    
+    // Get the adjacent points and draw a line connecting them
+    poseDetection.util
+                .getAdjacentPairs(poseDetection.SupportedModels.MoveNet)
+                .forEach(([ i, j ]) => {
+                
+      // Get adjacent keypoints
+      const kp1 = keypoints[i];
+      const kp2 = keypoints[j];
+                  
+      // TODO: improve score logic
+      // If score is null, just show the keypoint.
+      // const score1 = kp1.score != null ? kp1.score : 1;
+      // const score2 = kp2.score != null ? kp2.score : 1;
+      // const scoreThreshold = 0.3;
+
+      // if (score1 >= scoreThreshold && score2 >= scoreThreshold) {
+      ctx.beginPath();
+      ctx.moveTo(kp1.x, kp1.y);
+      ctx.lineTo(kp2.x, kp2.y);
+      ctx.stroke();
+      // }
+    });
+  }
+
+  const drawPoseKeypoints = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
+    // Styles
+    const circleColor = 'red';
+    ctx.fillStyle = circleColor;
+
+    // Draw keypoints 
+    pose.keypoints.forEach((keypoint) => {
+      const { x, y } = keypoint;
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, 2 * Math.PI);
+      ctx.fill();
+      
+    });
+  }
+
+  // Toggle Pose Detection
   const toggleDetection = () => {
     if (showDetection && canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d');
@@ -187,7 +231,7 @@ function App() {
   useEffect(() => {
     const detectionInterval = setInterval(() => {
       detect();
-    }, 100); // Run every 0.1 seconds
+    }, 500); // Run every 0.1 seconds
 
     return () => clearInterval(detectionInterval); // Cleanup interval on component unmount
   }, [detect]);
