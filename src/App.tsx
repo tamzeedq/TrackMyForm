@@ -16,10 +16,12 @@ function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [poseDetector, setPoseDetector] = useState<poseDetection.PoseDetector | null>(null);
+  const [lastDetectedPose, setLastDetectedPose] = useState<poseDetection.Pose | null>(null);
   const [showDetection, setShowDetection] = useState<boolean>(false);
   const [showWebcam, setShowWebCam] = useState<boolean>(true);
   const [recordingStatus, setRecordingStatus] = useState<boolean>(false);
   const [recordedVideo, setRecordedVideo] = useState([]);
+  const [selectedKeypoints, setSelectedKepoints] = useState<string[]>([]);
 
   // Initialize TensorFlowJS and the MoveNet Model
   useEffect(() => {
@@ -48,6 +50,8 @@ function App() {
         const poses = await poseDetector.estimatePoses(video);
 
         drawPoses(poses, videoWidth, videoHeight);
+        setLastDetectedPose(poses[0]);
+
       }
     }
   };
@@ -107,15 +111,23 @@ function App() {
   }
 
   const drawPoseKeypoints = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
-    // Styles
-    const circleColor = 'red';
-    ctx.fillStyle = circleColor;
+    let circleColor : string;
 
     // Draw keypoints 
     pose.keypoints.forEach((keypoint) => {
       const { x, y } = keypoint;
+
+      // console.log(selectedKeypoints, keypoint.name)
+      if (keypoint.name && selectedKeypoints.includes(keypoint.name)) {
+        circleColor = 'lime';
+      } else {
+        circleColor = 'red';
+      }
+
+      // Draw keypoint
+      ctx.fillStyle = circleColor;
       ctx.beginPath();
-      ctx.arc(x, y, 2, 0, 2 * Math.PI);
+      ctx.arc(x, y, 4, 0, 2 * Math.PI);
       ctx.fill();
       
     });
@@ -133,6 +145,42 @@ function App() {
 
     setShowDetection(!showDetection)
   }
+
+  // Highlight the closest detection to click
+  const highlightClosestDetection = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+
+    if (lastDetectedPose && canvas) {
+      // Initialize comparison vals
+      const canvasRect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - canvasRect.left;
+      const clickY = e.clientY - canvasRect.top;  
+      
+      let closestKeypoint: string | null | undefined = null;
+      let minDistance = Number.MAX_SAFE_INTEGER;
+
+      lastDetectedPose.keypoints.forEach((keypoint) => {
+        const distance = Math.sqrt((clickX - keypoint.x)**2 + (clickY - keypoint.y)**2);
+
+        // Founds new min and click is within 25 pixels
+        if(distance < minDistance && distance <= 30) {
+          // Update closest vals
+          closestKeypoint = keypoint.name;
+          minDistance = distance;
+        }
+      })
+
+      if (closestKeypoint) { // closest keypoint was found
+        if (selectedKeypoints.includes(closestKeypoint)) {
+          // remove clicked point from selected keypoints
+          setSelectedKepoints(selectedKeypoints.filter((kp) => {return kp !== closestKeypoint}));
+        } else { // add clicked point to selected keypoints
+          setSelectedKepoints(selectedKeypoints.concat(closestKeypoint));
+        }
+      }
+    }
+  }
+  
 
   // Camera Screenshot
   const screenshot = () => {
@@ -231,7 +279,7 @@ function App() {
   useEffect(() => {
     const detectionInterval = setInterval(() => {
       detect();
-    }, 500); // Run every 0.1 seconds
+    }, 100); // Run every 0.1 seconds
 
     return () => clearInterval(detectionInterval); // Cleanup interval on component unmount
   }, [detect]);
@@ -255,11 +303,14 @@ function App() {
           </button>
         </div>
         <div className="m-0 p-0 relative text-center">
-          <Webcam ref={webcamRef} className="z-5 m-0 p-0 w-[640px] h-[480px] border-dashed border-4 border-sky-50" screenshotFormat='image/jpeg'/>
+          <Webcam ref={webcamRef} 
+            className="z-5 m-0 p-0 w-[640px] h-[480px] border-dashed border-4 border-sky-50" 
+            screenshotFormat='image/jpeg'/>
           <canvas ref={canvasRef} 
-          className={`z-10 absolute top-0 left-0 m-0 p-0 w-[640px] h-[480px] border-dashed border-4 
+            className={`z-10 absolute top-0 left-0 m-0 p-0 w-[640px] h-[480px] border-dashed border-4 
                       ${showWebcam ? '' : 'bg-black'}
-                      ${recordingStatus ? 'border-red-400' : 'border-sky-50'}`} />
+                      ${recordingStatus ? 'border-red-400' : 'border-sky-50'}`} 
+            onClick={highlightClosestDetection}/>
         </div>
         <div className="flex flex-row justify-around">
           <button className={`btn ${recordingStatus ? 'text-red-400' : 'text-white'}  bg-zinc-500 outline-none font-bold hover:bg-zinc-700`} 
