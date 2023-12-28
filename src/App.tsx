@@ -17,6 +17,7 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [poseDetector, setPoseDetector] = useState<poseDetection.PoseDetector | null>(null);
   const [lastDetectedPose, setLastDetectedPose] = useState<poseDetection.Pose | null>(null);
+  const [traceImage, setTraceImage] = useState<ImageData | null>(null);
   const [showDetection, setShowDetection] = useState<boolean>(false);
   const [showWebcam, setShowWebCam] = useState<boolean>(true);
   const [recordingStatus, setRecordingStatus] = useState<boolean>(false);
@@ -68,15 +69,24 @@ function App() {
         //clear any previous drawings on canvas
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
+        // Redraw traces
+        if (recordingStatus && selectedKeypoints.length > 0 && traceImage) {
+          ctx.putImageData(traceImage, 0, 0);
+        }
+
         // Loop through each detected pose and draw it on the canvas
         poses.forEach((pose) => {
-          
+
+          // If recording and points are selected
+          if (recordingStatus && selectedKeypoints.length > 0) {
+            traceSelectedPoints(ctx, pose);
+            setTraceImage(ctx.getImageData(0, 0, 640, 480)); // save traces
+          }
+
+          // Draw kepoints and skeleton of pose
           drawPoseSkeleton(ctx, pose);
           drawPoseKeypoints(ctx, pose);
 
-          if (recordingStatus && selectedKeypoints.length > 0) {
-            traceSelectedPoints(ctx, pose);
-          }
         });
       }
     }
@@ -99,18 +109,17 @@ function App() {
       const kp1 = keypoints[i];
       const kp2 = keypoints[j];
                   
-      // TODO: improve score logic
-      // If score is null, just show the keypoint.
-      // const score1 = kp1.score != null ? kp1.score : 1;
-      // const score2 = kp2.score != null ? kp2.score : 1;
-      // const scoreThreshold = 0.3;
+      // Check if keypoint confidence is high enough to draw
+      const scoreThreshold = 0.2;
+      const score1 = kp1.score && kp1.score >= scoreThreshold;
+      const score2 = kp2.score && kp2.score >= scoreThreshold;
 
-      // if (score1 >= scoreThreshold && score2 >= scoreThreshold) {
-      ctx.beginPath();
-      ctx.moveTo(kp1.x, kp1.y);
-      ctx.lineTo(kp2.x, kp2.y);
-      ctx.stroke();
-      // }
+      if (score1 && score2) {
+        ctx.beginPath();
+        ctx.moveTo(kp1.x, kp1.y);
+        ctx.lineTo(kp2.x, kp2.y);
+        ctx.stroke();
+      }
     });
   }
 
@@ -142,6 +151,8 @@ function App() {
 
     // Draw keypoints 
     pose.keypoints.forEach((keypoint) => {
+      if (keypoint.score && keypoint.score < 0.2) {return};
+      
       const { x, y } = keypoint;
 
       // console.log(selectedKeypoints, keypoint.name)
@@ -242,6 +253,7 @@ function App() {
     } else {
       console.log("stopping recording");
       stopRecording();
+      setTraceImage(null);
     }
   }
 
@@ -306,7 +318,7 @@ function App() {
   useEffect(() => {
     const detectionInterval = setInterval(() => {
       detect();
-    }, 100); // Run every 0.1 seconds
+    }, 500); // Run every 0.1 seconds
 
     return () => clearInterval(detectionInterval); // Cleanup interval on component unmount
   }, [detect]);
