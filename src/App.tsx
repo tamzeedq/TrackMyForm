@@ -64,6 +64,7 @@ function App() {
         // adjust canvas dimensions to match video dimensions
         canvasRef.current.width = videoWidth;
         canvasRef.current.height = videoHeight;
+
         //clear any previous drawings on canvas
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
@@ -73,6 +74,9 @@ function App() {
           drawPoseSkeleton(ctx, pose);
           drawPoseKeypoints(ctx, pose);
 
+          if (recordingStatus && selectedKeypoints.length > 0) {
+            traceSelectedPoints(ctx, pose);
+          }
         });
       }
     }
@@ -107,6 +111,29 @@ function App() {
       ctx.lineTo(kp2.x, kp2.y);
       ctx.stroke();
       // }
+    });
+  }
+
+  // Trace path that keypoints of interest take
+  const traceSelectedPoints = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
+    ctx.fillStyle = "cornflowerblue";
+    ctx.strokeStyle = "cornflowerblue";
+    ctx.lineWidth = params.DEFAULT_LINE_WIDTH;
+
+    // Draw line connecting current detection and previous detection
+    pose.keypoints.forEach((keypoint, index) => {
+
+      // If keypoint is of interest and there was a previous detection
+      if (lastDetectedPose && 
+        keypoint.name != undefined && 
+        selectedKeypoints.includes(keypoint.name)) {
+
+        ctx.beginPath();
+        ctx.moveTo(lastDetectedPose.keypoints[index].x, lastDetectedPose.keypoints[index].y);
+        ctx.lineTo(keypoint.x, keypoint.y);
+        ctx.stroke();
+      }
+
     });
   }
 
@@ -294,12 +321,12 @@ function App() {
           <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700"
                   onClick={toggleDetection} >
             <FaRobot  size={20}/>
-            Toggle AI
+            Toggle AI / Clear
           </button>
           <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700"
                   onClick={() => {setShowWebCam(!showWebcam)}} >
             <FaCamera  size={20}/>
-            Toggle WebCam
+            Toggle Web Cam
           </button>
         </div>
         <div className="m-0 p-0 relative text-center">
