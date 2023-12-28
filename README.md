@@ -1,10 +1,40 @@
-# Getting Started with Create React App
+# Track My Form
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This project utilizes TensorFlow's Pose Detection model, specifically [MoveNet](https://github.com/tensorflow/tfjs-models/tree/master/pose-detection), to track user's exercise form and count repititions.
 
-## Available Scripts
+## Features and Guide
 
-In the project directory, you can run:
+- **Toggle AI and Webcam**
+    - Toggling AI will run and visualize the Pose Detection model's predictions from the user's webcam
+    - Toggling Webcam toggles the visibility of the Web Cam
+    - The AI predictions can be visualized while the webcam is toggled off
+
+- **Tracing Keypoint Path**
+    - Clicking on red keypoints that are detected by the model will select them for tracking and turn the point green
+    - Clicking a selected green point will unselect it and turn it back to red
+    - After clicking the **Start Recording** button, the path of selected green points will be traced and visualized to track exercise form throughout the duration of the recording
+
+- **Count Exercise Repititions**
+    - TODO
+
+- **Download Recording**
+    - TODO
+
+- **Upload Video**
+    - TODO
+
+
+
+## Getting Started
+
+Clone the repo and once in the project directory  run:
+
+```
+npm install
+```
+To install libraries and dependencies. This will install the TensorFlow Model, React Webcam, and some other libraries used to make the UI.
+
+You can then run any of the following :
 
 ### `npm start`
 
@@ -24,23 +54,4 @@ See the section about [running tests](https://facebook.github.io/create-react-ap
 Builds the app for production to the `build` folder.\
 It correctly bundles React in production mode and optimizes the build for the best performance.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).

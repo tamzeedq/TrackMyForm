@@ -338,7 +338,7 @@ function App() {
           <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700"
                   onClick={() => {setShowWebCam(!showWebcam)}} >
             <FaCamera  size={20}/>
-            Toggle Web Cam
+            Toggle Webcam
           </button>
         </div>
         <div className="m-0 p-0 relative text-center">
