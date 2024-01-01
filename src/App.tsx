@@ -35,6 +35,7 @@ function App() {
   // check if halfway point of rep has been reached
   const [halfwayStatus, setHalfwayStatus] = useState<boolean>(false);
 
+  //  -------------- Pose Detection ----------------
   // Initialize TensorFlowJS and the MoveNet Model
   useEffect(() => {
     const initializeTensorFlow = async () => {
@@ -78,6 +79,186 @@ function App() {
       }
     }
   };
+
+  // Prediction Loop
+  useEffect(() => {
+    const detectionInterval = setInterval(() => {
+      detect();
+    }, 100); // Run every x seconds
+
+    return () => clearInterval(detectionInterval); // Cleanup interval on component unmount
+  }, [detect]);
+
+  // Toggle Pose Detection
+  const toggleDetection = () => {
+    if (showDetection && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        //clear any previous drawings on canvas
+        ctx.clearRect(0, 0, 640, 480);  
+      }
+    }
+
+    setShowDetection(!showDetection)
+  }
+
+  // -------------- Drawing --------------
+  // Draw Pose predictions on canvas
+  const drawPoses = (poses: poseDetection.Pose[], videoWidth: number, videoHeight: number) => {
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        // adjust canvas dimensions to match video dimensions
+        canvasRef.current.width = videoWidth;
+        canvasRef.current.height = videoHeight;
+
+        //clear any previous drawings on canvas
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+        // Redraw traces
+        if (recordingStatus && selectedKeypoints.length > 0 && traceImage) {
+          ctx.putImageData(traceImage, 0, 0);
+        }
+
+        // Loop through each detected pose and draw it on the canvas
+        poses.forEach((pose) => {
+
+          // If recording and points are selected
+          if (recordingStatus && selectedKeypoints.length > 0) {
+            traceSelectedPoints(ctx, pose);
+            setTraceImage(ctx.getImageData(0, 0, 640, 480)); // save traces
+          }
+
+          // Draw kepoints and skeleton of pose
+          drawPoseSkeleton(ctx, pose);
+          drawPoseKeypoints(ctx, pose);
+
+        });
+      }
+    }
+  };
+
+  // Draw the lines that connect keypoints
+  const drawPoseSkeleton = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
+    // Styles
+    ctx.fillStyle = params.DEFAULT_SKELETON_COLOR;
+    ctx.strokeStyle = params.DEFAULT_SKELETON_COLOR;
+    ctx.lineWidth = params.DEFAULT_LINE_WIDTH;
+    
+    const keypoints = pose["keypoints"];
+    
+    // Get the adjacent points and draw a line connecting them
+    poseDetection.util
+                .getAdjacentPairs(poseDetection.SupportedModels.MoveNet)
+                .forEach(([ i, j ]) => {
+                
+      // Get adjacent keypoints
+      const kp1 = keypoints[i];
+      const kp2 = keypoints[j];
+                  
+      // Check if keypoint confidence is high enough to draw
+      const scoreThreshold = params.SKELETON_CONFIDENCE;
+      const score1 = kp1.score && kp1.score >= scoreThreshold;
+      const score2 = kp2.score && kp2.score >= scoreThreshold;
+
+      if (score1 && score2) {
+        ctx.beginPath();
+        ctx.moveTo(kp1.x, kp1.y);
+        ctx.lineTo(kp2.x, kp2.y);
+        ctx.stroke();
+      }
+    });
+  }
+
+  // Draw the keypoints of the pose (joints, nose, eyes, etc)
+  const drawPoseKeypoints = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
+
+    // Draw keypoints 
+    pose.keypoints.forEach((keypoint) => {
+      if (keypoint.score && keypoint.score < 0.2) {return};
+      
+      const { x, y } = keypoint;
+
+      if (keypoint.name && selectedKeypoints.includes(keypoint.name)) {
+        ctx.fillStyle = params.SELECTED_KEYPOINT_COLOR;
+      } else {
+        ctx.fillStyle = params.KEYPOINT_COLOR;
+      }
+
+      // Draw keypoint
+      ctx.beginPath();
+      ctx.arc(x, y, params.DEFAULT_RADIUS, 0, 2 * Math.PI);
+      ctx.fill();
+      
+    });
+  }
+
+  // Trace path that keypoints of interest take
+  const traceSelectedPoints = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
+    ctx.fillStyle = params.DEFAULT_TRACE_COLOR;
+    ctx.strokeStyle = params.DEFAULT_TRACE_COLOR;
+    ctx.lineWidth = params.DEFAULT_LINE_WIDTH;
+
+    // Draw line connecting current detection and previous detection
+    pose.keypoints.forEach((keypoint, index) => {
+
+      // If keypoint is of interest and there was a previous detection
+      if (lastDetectedPose && 
+        keypoint.name !== undefined && 
+        selectedKeypoints.includes(keypoint.name)) {
+
+        ctx.beginPath();
+        ctx.moveTo(lastDetectedPose.keypoints[index].x, lastDetectedPose.keypoints[index].y);
+        ctx.lineTo(keypoint.x, keypoint.y);
+        ctx.stroke();
+      }
+
+    });
+  }
+
+  // Highlight the closest detection to click on webcam
+  const highlightClosestDetection = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+
+    if (lastDetectedPose && canvas) {
+      // Initialize comparison vals
+      const canvasRect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - canvasRect.left;
+      const clickY = e.clientY - canvasRect.top;  
+      
+      let closestKeypoint: string | null | undefined = null;
+      let minDistance = Number.MAX_SAFE_INTEGER;
+
+      lastDetectedPose.keypoints.forEach((keypoint) => {
+        const distance = Math.sqrt((clickX - keypoint.x)**2 + (clickY - keypoint.y)**2);
+
+        // Founds new min and click is within 25 pixels
+        if(distance < minDistance && distance <= 30) {
+          // Update closest vals
+          closestKeypoint = keypoint.name;
+          minDistance = distance;
+        }
+      })
+
+      if (closestKeypoint) { // closest keypoint was found
+        if (selectedKeypoints.includes(closestKeypoint)) {
+          // remove clicked point from selected keypoints
+          setSelectedKepoints(selectedKeypoints.filter((kp) => {return kp !== closestKeypoint}));
+        } else { // add clicked point to selected keypoints
+          setSelectedKepoints(selectedKeypoints.concat(closestKeypoint));
+        }
+      }
+    }
+  }
+  
+  // -------------- Exercise UI --------------
+  // Handle picking an exercise to count reps from drop down
+  const chooseDropdownExercise = (e : React.MouseEvent<HTMLAnchorElement, MouseEvent>, exercise:string | null) => {
+    e.preventDefault(); 
+    setCurrExercise(exercise); 
+    setRepCount(0);
+    setHalfwayStatus(false);
+  }
 
   // Handle checking Push-Up Form
   const checkPushUpForm = (pose : poseDetection.Pose) => {
@@ -141,168 +322,8 @@ function App() {
     }
   }
 
-  // Draw Pose predictions on canvas
-  const drawPoses = (poses: poseDetection.Pose[], videoWidth: number, videoHeight: number) => {
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        // adjust canvas dimensions to match video dimensions
-        canvasRef.current.width = videoWidth;
-        canvasRef.current.height = videoHeight;
-
-        //clear any previous drawings on canvas
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-        // Redraw traces
-        if (recordingStatus && selectedKeypoints.length > 0 && traceImage) {
-          ctx.putImageData(traceImage, 0, 0);
-        }
-
-        // Loop through each detected pose and draw it on the canvas
-        poses.forEach((pose) => {
-
-          // If recording and points are selected
-          if (recordingStatus && selectedKeypoints.length > 0) {
-            traceSelectedPoints(ctx, pose);
-            setTraceImage(ctx.getImageData(0, 0, 640, 480)); // save traces
-          }
-
-          // Draw kepoints and skeleton of pose
-          drawPoseSkeleton(ctx, pose);
-          drawPoseKeypoints(ctx, pose);
-
-        });
-      }
-    }
-  };
-
-  const drawPoseSkeleton = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
-    // Styles
-    ctx.fillStyle = "white";
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = params.DEFAULT_LINE_WIDTH;
-    
-    const keypoints = pose["keypoints"];
-    
-    // Get the adjacent points and draw a line connecting them
-    poseDetection.util
-                .getAdjacentPairs(poseDetection.SupportedModels.MoveNet)
-                .forEach(([ i, j ]) => {
-                
-      // Get adjacent keypoints
-      const kp1 = keypoints[i];
-      const kp2 = keypoints[j];
-                  
-      // Check if keypoint confidence is high enough to draw
-      const scoreThreshold = 0.2;
-      const score1 = kp1.score && kp1.score >= scoreThreshold;
-      const score2 = kp2.score && kp2.score >= scoreThreshold;
-
-      if (score1 && score2) {
-        ctx.beginPath();
-        ctx.moveTo(kp1.x, kp1.y);
-        ctx.lineTo(kp2.x, kp2.y);
-        ctx.stroke();
-      }
-    });
-  }
-
-  // Trace path that keypoints of interest take
-  const traceSelectedPoints = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
-    ctx.fillStyle = "cornflowerblue";
-    ctx.strokeStyle = "cornflowerblue";
-    ctx.lineWidth = params.DEFAULT_LINE_WIDTH;
-
-    // Draw line connecting current detection and previous detection
-    pose.keypoints.forEach((keypoint, index) => {
-
-      // If keypoint is of interest and there was a previous detection
-      if (lastDetectedPose && 
-        keypoint.name !== undefined && 
-        selectedKeypoints.includes(keypoint.name)) {
-
-        ctx.beginPath();
-        ctx.moveTo(lastDetectedPose.keypoints[index].x, lastDetectedPose.keypoints[index].y);
-        ctx.lineTo(keypoint.x, keypoint.y);
-        ctx.stroke();
-      }
-
-    });
-  }
-
-  const drawPoseKeypoints = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
-    let circleColor : string;
-
-    // Draw keypoints 
-    pose.keypoints.forEach((keypoint) => {
-      if (keypoint.score && keypoint.score < 0.2) {return};
-      
-      const { x, y } = keypoint;
-
-      // console.log(selectedKeypoints, keypoint.name)
-      if (keypoint.name && selectedKeypoints.includes(keypoint.name)) {
-        circleColor = 'lime';
-      } else {
-        circleColor = 'red';
-      }
-
-      // Draw keypoint
-      ctx.fillStyle = circleColor;
-      ctx.beginPath();
-      ctx.arc(x, y, 4, 0, 2 * Math.PI);
-      ctx.fill();
-      
-    });
-  }
-
-  // Toggle Pose Detection
-  const toggleDetection = () => {
-    if (showDetection && canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        //clear any previous drawings on canvas
-        ctx.clearRect(0, 0, 640, 480);  
-      }
-    }
-
-    setShowDetection(!showDetection)
-  }
-
-  // Highlight the closest detection to click
-  const highlightClosestDetection = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-
-    if (lastDetectedPose && canvas) {
-      // Initialize comparison vals
-      const canvasRect = canvas.getBoundingClientRect();
-      const clickX = e.clientX - canvasRect.left;
-      const clickY = e.clientY - canvasRect.top;  
-      
-      let closestKeypoint: string | null | undefined = null;
-      let minDistance = Number.MAX_SAFE_INTEGER;
-
-      lastDetectedPose.keypoints.forEach((keypoint) => {
-        const distance = Math.sqrt((clickX - keypoint.x)**2 + (clickY - keypoint.y)**2);
-
-        // Founds new min and click is within 25 pixels
-        if(distance < minDistance && distance <= 30) {
-          // Update closest vals
-          closestKeypoint = keypoint.name;
-          minDistance = distance;
-        }
-      })
-
-      if (closestKeypoint) { // closest keypoint was found
-        if (selectedKeypoints.includes(closestKeypoint)) {
-          // remove clicked point from selected keypoints
-          setSelectedKepoints(selectedKeypoints.filter((kp) => {return kp !== closestKeypoint}));
-        } else { // add clicked point to selected keypoints
-          setSelectedKepoints(selectedKeypoints.concat(closestKeypoint));
-        }
-      }
-    }
-  }
-  
+  // -------------- Camera / Recording --------------
+  // Original Example : https://codepen.io/mozmorris/pen/yLYKzyp?editors=0010
 
   // Camera Screenshot
   const screenshot = () => {
@@ -327,33 +348,13 @@ function App() {
       }
     }
   }
-
-  // Camera Record 
+  
   // Handle camera record click
-  const handleRecordClick = () => {
-    console.log("inside record click");
-    if(!recordingStatus) {
-      record();
-    } else {
-      console.log("stopping recording");
-      stopRecording();
-      setTraceImage(null);
-    }
-  }
-
-  // Append new recored data to what's already recorded
-  const handleDataAvailable = (data:any) => {
-    console.log(data);
-    if (data) {
-      console.log("got data");
-      setRecordedVideo((prev) => prev.concat(data));
-    }
-  }
-
-  // Make new recorder and start recording
-  const record = () => {
+  const handleStartCaptureClick = React.useCallback(() => {
     if (webcamRef.current && webcamRef.current.stream) {
       setRecordingStatus(true);
+
+      // Make new recorder and start recording
       mediaRecorderRef.current = new MediaRecorder(webcamRef.current.stream, {
         mimeType: "video/webm"
       });
@@ -361,60 +362,55 @@ function App() {
         "dataavailable",
         handleDataAvailable
       );
+
       mediaRecorderRef.current.start();
-      console.log("started recording");
     }
-  }
+  }, [webcamRef, setRecordingStatus, mediaRecorderRef]);
+
+  // Concatenate recorded video
+  const handleDataAvailable = React.useCallback(
+    ({ data }: { data: any }) => {
+      if (data.size > 0) {
+        setRecordedVideo((prev) => prev.concat(data));
+      }
+    },
+    [setRecordedVideo]
+  );
 
   // Download recorded video
   const downloadRecording = () => {
     if (recordedVideo.length > 0) {
-      console.log("downloading");
+
+      // Create a blob from the recorded video
       const blob = new Blob(recordedVideo, {
         type: "video/webm"
       });
+
+      // Create a URL from the blob
       const url = URL.createObjectURL(blob);
       
+      // Create an invisible download link element
       const a = document.createElement("a");
       document.body.appendChild(a);
 
-      // Set attributes using setAttribute
       a.setAttribute("style", "display: none");
       a.href = url;
-      a.download = "exercise-webcam.webm";
-      a.click();
+      a.download = "exercise_webcam.webm";
+      a.click(); // Trigger a click on the element to start download
 
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(url); // Release the URL object
       setRecordedVideo([]);
     }
   };
 
-
   // Stop recording and update recording status
-  const stopRecording = () => {
+  const handleStopCaptureClick = React.useCallback(() => {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       setRecordingStatus(false);
-      setHalfwayStatus(false);  
+      setHalfwayStatus(false);
     }
-  }
-
-  // Handle picking an exercise to count reps from drop down
-  const chooseDropdownExercise = (e : React.MouseEvent<HTMLAnchorElement, MouseEvent>, exercise:string | null) => {
-    e.preventDefault(); 
-    setCurrExercise(exercise); 
-    setRepCount(0);
-    setHalfwayStatus(false);
-  }
-  
-  // Prediction Loop
-  useEffect(() => {
-    const detectionInterval = setInterval(() => {
-      detect();
-    }, 100); // Run every x seconds
-
-    return () => clearInterval(detectionInterval); // Cleanup interval on component unmount
-  }, [detect]);
+  }, [mediaRecorderRef, webcamRef, setRecordingStatus, setHalfwayStatus]);
 
   return (
     <div className="min-h-screen bg-zinc-800 flex justify-center items-center">
@@ -454,21 +450,21 @@ function App() {
                       ${recordingStatus ? 'border-red-400' : 'border-sky-50'}`} 
             onClick={highlightClosestDetection}/>
         </div>
+        
         <div className="flex flex-row justify-around">
-          <button className={`btn ${recordingStatus ? 'text-red-400' : 'text-white'}  bg-zinc-500 outline-none font-bold hover:bg-zinc-700`} 
-                  onClick={handleRecordClick}>
-            {recordingStatus ? (
-              <>
-                STOP RECORDING
-                <FaStop  size={20} />
-              </>
-            ) : (
-              <>
-                START RECORDING
-                <BsFillRecordFill size={20} />
-              </>
-            )}
-          </button>
+          {recordingStatus ? 
+            <button className="btn text-red-400 bg-zinc-500 outline-none font-bold hover:bg-zinc-700" 
+              onClick={handleStopCaptureClick}>
+              STOP RECORDING
+              <FaStop  size={20} />
+            </button>
+            :
+            <button className="btn text-white bg-zinc-500 outline-none font-bold hover:bg-zinc-700" 
+              onClick={handleStartCaptureClick}>
+              START RECORDING
+              <BsFillRecordFill size={20} />
+            </button>
+          }
           <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700" 
                   onClick={downloadRecording}>
             DOWNLOAD
