@@ -8,6 +8,7 @@ import { FaCloudUploadAlt, FaRobot, FaCamera, FaStop } from 'react-icons/fa';
 import { BsFillRecordFill } from "react-icons/bs";
 import { IoMdDownload } from "react-icons/io";
 import { RiScreenshot2Line } from "react-icons/ri";
+import { PiPersonArmsSpread } from "react-icons/pi";
 import * as params from './params';
 
 
@@ -15,14 +16,24 @@ function App() {
   const webcamRef = useRef<Webcam>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // State variables for Pose Detection
   const [poseDetector, setPoseDetector] = useState<poseDetection.PoseDetector | null>(null);
   const [lastDetectedPose, setLastDetectedPose] = useState<poseDetection.Pose | null>(null);
+  const [selectedKeypoints, setSelectedKepoints] = useState<string[]>([]);
   const [traceImage, setTraceImage] = useState<ImageData | null>(null);
+
+  // State variables for UI
   const [showDetection, setShowDetection] = useState<boolean>(false);
   const [showWebcam, setShowWebCam] = useState<boolean>(true);
   const [recordingStatus, setRecordingStatus] = useState<boolean>(false);
   const [recordedVideo, setRecordedVideo] = useState([]);
-  const [selectedKeypoints, setSelectedKepoints] = useState<string[]>([]);
+
+  // State variables to monitor exercise
+  const [currExercise, setCurrExercise] = useState<string | null>();
+  const [repCount, setRepCount] = useState<number>(0);
+  // check if halfway point of rep has been reached
+  const [halfwayStatus, setHalfwayStatus] = useState<boolean>(false);
 
   // Initialize TensorFlowJS and the MoveNet Model
   useEffect(() => {
@@ -49,13 +60,86 @@ function App() {
       if (poseDetector && showDetection) {
         // Make prediction and get position labels 
         const poses = await poseDetector.estimatePoses(video);
+        
+        // If recording and excerise is selected
+        if (recordingStatus && currExercise) {
 
+          // Check rep progress based on exercise
+          if (currExercise === "Push-Up") {checkPushUpForm(poses[0]);} 
+          else if (currExercise === "Pull-Up") {checkPullUpForm(poses[0]);} 
+          else if (currExercise === "Squat") {checkSquatForm(poses[0]);}
+          
+        }
+
+        // Draw predictions on canvas
         drawPoses(poses, videoWidth, videoHeight);
         setLastDetectedPose(poses[0]);
 
       }
     }
   };
+
+  // Handle checking Push-Up Form
+  const checkPushUpForm = (pose : poseDetection.Pose) => {
+    if (pose.keypoints) {
+
+      // if left and right shoulder are below left and right elbow
+      if ((pose.keypoints[6].y > pose.keypoints[8].y) || 
+          (pose.keypoints[5].y > pose.keypoints[7].y)) {
+        
+        setHalfwayStatus(true); // Concentric was completed
+
+      } else if ((pose.keypoints[6].y < pose.keypoints[8].y) && 
+                (pose.keypoints[5].y < pose.keypoints[7].y) && halfwayStatus) {
+        // if left and right shoulder are above left and right elbow and essentric was completed
+
+        setRepCount((prev) => prev + 1); // increment rep count
+        setHalfwayStatus(false); // Concentric was completed, rep complete
+
+      }
+    }
+  }
+
+  // Handle checking Pull-Up Form
+  const checkPullUpForm = (pose : poseDetection.Pose) => {
+    
+    if (pose.keypoints) {
+      // if left and right shoulder are below left and right elbow
+      if ((pose.keypoints[6].y > pose.keypoints[8].y) && 
+          (pose.keypoints[5].y > pose.keypoints[7].y)) {
+
+        setHalfwayStatus(true); // Essentric was completed
+
+      } else if ((pose.keypoints[6].y <= pose.keypoints[8].y) && 
+                (pose.keypoints[5].y <= pose.keypoints[7].y) && halfwayStatus) {
+        // if left and right shoulder are above left and right elbow
+
+        setRepCount((prev) => prev + 1); // increment rep count
+        setHalfwayStatus(false); // Concentric was completed, rep complete
+      }
+    }
+  }
+
+  // Handle checking Squat Form
+  const checkSquatForm = (pose : poseDetection.Pose) => {
+    if (pose.keypoints) {
+
+      // if left and right hip are below left and right knee
+      if ((pose.keypoints[12].y >= pose.keypoints[14].y) || 
+          (pose.keypoints[11].y >= pose.keypoints[13].y)) {
+    
+        setHalfwayStatus(true); // Essentric was completed
+
+      } else if ((pose.keypoints[11].y < pose.keypoints[13].y) && 
+                (pose.keypoints[12].y < pose.keypoints[14].y) && halfwayStatus) {
+        // if left and right hip are above left and right knee and essentric was completed
+        
+        setRepCount((prev) => prev + 1); // increment rep count
+        setHalfwayStatus(false); // Concentric was completed, rep complete
+
+      }
+    }
+  }
 
   // Draw Pose predictions on canvas
   const drawPoses = (poses: poseDetection.Pose[], videoWidth: number, videoHeight: number) => {
@@ -134,7 +218,7 @@ function App() {
 
       // If keypoint is of interest and there was a previous detection
       if (lastDetectedPose && 
-        keypoint.name != undefined && 
+        keypoint.name !== undefined && 
         selectedKeypoints.includes(keypoint.name)) {
 
         ctx.beginPath();
@@ -311,14 +395,23 @@ function App() {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       setRecordingStatus(false);
+      setHalfwayStatus(false);  
     }
   }
 
+  // Handle picking an exercise to count reps from drop down
+  const chooseDropdownExercise = (e : React.MouseEvent<HTMLAnchorElement, MouseEvent>, exercise:string | null) => {
+    e.preventDefault(); 
+    setCurrExercise(exercise); 
+    setRepCount(0);
+    setHalfwayStatus(false);
+  }
+  
   // Prediction Loop
   useEffect(() => {
     const detectionInterval = setInterval(() => {
       detect();
-    }, 500); // Run every 0.1 seconds
+    }, 100); // Run every x seconds
 
     return () => clearInterval(detectionInterval); // Cleanup interval on component unmount
   }, [detect]);
@@ -332,14 +425,24 @@ function App() {
         <div className='flex flex-row justify-around items-center'>
           <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700"
                   onClick={toggleDetection} >
-            <FaRobot  size={20}/>
+            <FaRobot size={20}/>
             Toggle AI / Clear
           </button>
           <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700"
                   onClick={() => {setShowWebCam(!showWebcam)}} >
-            <FaCamera  size={20}/>
+            <FaCamera size={20}/>
             Toggle Webcam
           </button>
+          <div className="dropdown">
+            <div tabIndex={0} role="button" className="btn bg-zinc-500 hover:bg-zinc-700 text-white m-1"> <PiPersonArmsSpread size={20}/> {currExercise ? currExercise : <>Pick Exercise</>}</div>
+            <ul tabIndex={0} className="dropdown-content bg-zinc-500 text-white z-[20] menu p-2 shadow bg-base-100 rounded-box w-52">
+              <li><a href='/' className='hover:bg-zinc-700' onClick={(e) => { chooseDropdownExercise(e, null)}}>No Count</a></li>
+              <li><a href='/' className='hover:bg-zinc-700' onClick={(e) => { chooseDropdownExercise(e,"Push-Up")}}>Push-Up</a></li>
+              <li><a href='/' className='hover:bg-zinc-700' onClick={(e) => { chooseDropdownExercise(e,"Pull-Up")}}>Pull-Up</a></li>
+              <li><a href='/' className='hover:bg-zinc-700' onClick={(e) => { chooseDropdownExercise(e,"Squat")}}>Squat</a></li>
+            </ul>
+          </div>
+          { currExercise ? <div className='text-white text-xl'>Reps: {repCount}</div>: <></>}
         </div>
         <div className="m-0 p-0 relative text-center">
           <Webcam ref={webcamRef} 
@@ -376,7 +479,7 @@ function App() {
             <RiScreenshot2Line size={20}/>
             SCREENSHOT
           </button>
-          <label htmlFor="file-input" className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700">
+          <label htmlFor="file-input" className=" btn btn-disabled bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700">
            <FaCloudUploadAlt size={25}/>
             UPLOAD FILE
           </label>
