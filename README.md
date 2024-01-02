@@ -15,19 +15,24 @@ This project utilizes TensorFlow's Pose Detection model, specifically [MoveNet](
     - After clicking the **Start Recording** button, the path of selected green points will be traced and visualized to track exercise form throughout the duration of the recording
 
 - **Count Exercise Repititions**
-    - TODO
+    - Pick an exercise to count repititions for from the dropdown selection
+    - After clicking **Start Recording**, the repititions will start count for the duration of the exercise recording
+    - Changing exercise choice will reset the count, or you can opt for no counting with the **No Count** option in the dropdown
 
 - **Download Recording**
-    - TODO
+    - After starting your recording and then stopping the recording, the video is then available to download
+    - Clicking the download button beside the record button will initiate the download as a *webm* file
+    - This button will normally stay blocked unless there is a video available to download
 
+
+<!-- 
 - **Upload Video**
-    - TODO
-
+    - TODO -->
 
 
 ## Getting Started
 
-Clone the repo and once in the project directory  run:
+Clone the repo and once in the project directory run:
 
 ```
 npm install

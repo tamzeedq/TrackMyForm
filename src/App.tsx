@@ -353,6 +353,7 @@ function App() {
   const handleStartCaptureClick = React.useCallback(() => {
     if (webcamRef.current && webcamRef.current.stream) {
       setRecordingStatus(true);
+      setRecordedVideo([]);
 
       // Make new recorder and start recording
       mediaRecorderRef.current = new MediaRecorder(webcamRef.current.stream, {
@@ -465,7 +466,7 @@ function App() {
               <BsFillRecordFill size={20} />
             </button>
           }
-          <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700" 
+          <button className={`btn ${(recordedVideo.length > 0) ? '' : 'btn-disabled'} bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700`} 
                   onClick={downloadRecording}>
             DOWNLOAD
             <IoMdDownload size={20}/>
