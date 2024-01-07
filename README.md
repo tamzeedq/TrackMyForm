@@ -1,6 +1,6 @@
 # Track My Form
 
-This project utilizes TensorFlow's Pose Detection model, specifically [MoveNet](https://github.com/tensorflow/tfjs-models/tree/master/pose-detection), to track user's exercise form and count repititions.
+This project utilizes TensorFlow's Pose Detection model, specifically [MoveNet](https://github.com/tensorflow/tfjs-models/tree/master/pose-detection), to track user's exercise form and count repetitions.
 
 ## Features and Guide
 
@@ -14,9 +14,9 @@ This project utilizes TensorFlow's Pose Detection model, specifically [MoveNet](
     - Clicking a selected green point will unselect it and turn it back to red
     - After clicking the **Start Recording** button, the path of selected green points will be traced and visualized to track exercise form throughout the duration of the recording
 
-- **Count Exercise Repititions**
-    - Pick an exercise to count repititions for from the dropdown selection
-    - After clicking **Start Recording**, the repititions will start count for the duration of the exercise recording
+- **Count Exercise Repetitions**
+    - Pick an exercise to count repetitions for from the dropdown selection
+    - After clicking **Start Recording**, the repetitions will start count for the duration of the exercise recording
     - Changing exercise choice will reset the count, or you can opt for no counting with the **No Count** option in the dropdown
 
 - **Download Recording**
