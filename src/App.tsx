@@ -4,7 +4,7 @@ import * as poseDetection from '@tensorflow-models/pose-detection';
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
 import Webcam from 'react-webcam';
-import { FaCloudUploadAlt, FaRobot, FaCamera, FaStop } from 'react-icons/fa';
+import { FaRobot, FaCamera, FaStop, FaGithub } from 'react-icons/fa';
 import { BsFillRecordFill } from "react-icons/bs";
 import { IoMdDownload } from "react-icons/io";
 import { RiScreenshot2Line } from "react-icons/ri";
@@ -35,6 +35,58 @@ function App() {
   // check if halfway point of rep has been reached
   const [halfwayStatus, setHalfwayStatus] = useState<boolean>(false);
 
+
+
+  // -------------- Exercise UI --------------
+  // Handle picking an exercise to count reps from drop down
+  const chooseDropdownExercise = (e : React.MouseEvent<HTMLButtonElement, MouseEvent>, exercise:string | null) => {
+    e.preventDefault(); 
+    setCurrExercise(exercise); 
+    setRepCount(0);
+    setHalfwayStatus(false);
+  }
+  // Handle checking Push-Up Form
+  const checkPushUpForm = React.useCallback((pose: poseDetection.Pose) => {
+    if (pose.keypoints) {
+      if ((pose.keypoints[6].y > pose.keypoints[8].y) || 
+          (pose.keypoints[5].y > pose.keypoints[7].y)) {
+        setHalfwayStatus(true);
+      } else if ((pose.keypoints[6].y < pose.keypoints[8].y) && 
+                (pose.keypoints[5].y < pose.keypoints[7].y) && halfwayStatus) {
+        setRepCount((prev) => prev + 1);
+        setHalfwayStatus(false);
+      }
+    }
+  }, [halfwayStatus]);
+
+  // Handle checking Pull-Up Form
+  const checkPullUpForm = React.useCallback((pose: poseDetection.Pose) => {
+    if (pose.keypoints) {
+      if ((pose.keypoints[6].y > pose.keypoints[8].y) && 
+          (pose.keypoints[5].y > pose.keypoints[7].y)) {
+        setHalfwayStatus(true);
+      } else if ((pose.keypoints[6].y <= pose.keypoints[8].y) && 
+                (pose.keypoints[5].y <= pose.keypoints[7].y) && halfwayStatus) {
+        setRepCount((prev) => prev + 1);
+        setHalfwayStatus(false);
+      }
+    }
+  }, [halfwayStatus]);
+
+  // Handle checking Squat Form
+  const checkSquatForm = React.useCallback((pose: poseDetection.Pose) => {
+    if (pose.keypoints) {
+      if ((pose.keypoints[12].y >= pose.keypoints[14].y) || 
+          (pose.keypoints[11].y >= pose.keypoints[13].y)) {
+        setHalfwayStatus(true);
+      } else if ((pose.keypoints[11].y < pose.keypoints[13].y) && 
+                (pose.keypoints[12].y < pose.keypoints[14].y) && halfwayStatus) {
+        setRepCount((prev) => prev + 1);
+        setHalfwayStatus(false);
+      }
+    }
+  }, [halfwayStatus]);
+
   //  -------------- Pose Detection ----------------
   // Initialize TensorFlowJS and the MoveNet Model
   useEffect(() => {
@@ -51,95 +103,9 @@ function App() {
     initializeTensorFlow();
   }, []);
 
-  // Make predictions on webcam when ready
-  const detect = async () => {
-    if (webcamRef.current && webcamRef.current.video && webcamRef.current.video.readyState === 4) {
-      const video = webcamRef.current.video;
-      const videoWidth = webcamRef.current.video.videoWidth;
-      const videoHeight = webcamRef.current.video.videoHeight;
-
-      if (poseDetector && showDetection) {
-        // Make prediction and get position labels 
-        const poses = await poseDetector.estimatePoses(video);
-        
-        // If recording and excerise is selected
-        if (recordingStatus && currExercise) {
-
-          // Check rep progress based on exercise
-          if (currExercise === "Push-Up") {checkPushUpForm(poses[0]);} 
-          else if (currExercise === "Pull-Up") {checkPullUpForm(poses[0]);} 
-          else if (currExercise === "Squat") {checkSquatForm(poses[0]);}
-          
-        }
-
-        // Draw predictions on canvas
-        drawPoses(poses, videoWidth, videoHeight);
-        setLastDetectedPose(poses[0]);
-
-      }
-    }
-  };
-
-  // Prediction Loop
-  useEffect(() => {
-    const detectionInterval = setInterval(() => {
-      detect();
-    }, 100); // Run every x seconds
-
-    return () => clearInterval(detectionInterval); // Cleanup interval on component unmount
-  }, [detect]);
-
-  // Toggle Pose Detection
-  const toggleDetection = () => {
-    if (showDetection && canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        //clear any previous drawings on canvas
-        ctx.clearRect(0, 0, 640, 480);  
-      }
-    }
-
-    setShowDetection(!showDetection)
-  }
-
   // -------------- Drawing --------------
-  // Draw Pose predictions on canvas
-  const drawPoses = (poses: poseDetection.Pose[], videoWidth: number, videoHeight: number) => {
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        // adjust canvas dimensions to match video dimensions
-        canvasRef.current.width = videoWidth;
-        canvasRef.current.height = videoHeight;
-
-        //clear any previous drawings on canvas
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-        // Redraw traces
-        if (recordingStatus && selectedKeypoints.length > 0 && traceImage) {
-          ctx.putImageData(traceImage, 0, 0);
-        }
-
-        // Loop through each detected pose and draw it on the canvas
-        poses.forEach((pose) => {
-
-          // If recording and points are selected
-          if (recordingStatus && selectedKeypoints.length > 0) {
-            traceSelectedPoints(ctx, pose);
-            setTraceImage(ctx.getImageData(0, 0, 640, 480)); // save traces
-          }
-
-          // Draw kepoints and skeleton of pose
-          drawPoseSkeleton(ctx, pose);
-          drawPoseKeypoints(ctx, pose);
-
-        });
-      }
-    }
-  };
-
   // Draw the lines that connect keypoints
-  const drawPoseSkeleton = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
+  const drawPoseSkeleton = React.useCallback((ctx: CanvasRenderingContext2D, pose: poseDetection.Pose) => {
     // Styles
     ctx.fillStyle = params.DEFAULT_SKELETON_COLOR;
     ctx.strokeStyle = params.DEFAULT_SKELETON_COLOR;
@@ -168,10 +134,10 @@ function App() {
         ctx.stroke();
       }
     });
-  }
+  }, []);
 
   // Draw the keypoints of the pose (joints, nose, eyes, etc)
-  const drawPoseKeypoints = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
+  const drawPoseKeypoints = React.useCallback((ctx: CanvasRenderingContext2D, pose: poseDetection.Pose) => {
 
     // Draw keypoints 
     pose.keypoints.forEach((keypoint) => {
@@ -191,10 +157,10 @@ function App() {
       ctx.fill();
       
     });
-  }
+  }, [selectedKeypoints]);
 
   // Trace path that keypoints of interest take
-  const traceSelectedPoints = (ctx : CanvasRenderingContext2D, pose: poseDetection.Pose) => {
+  const traceSelectedPoints = React.useCallback((ctx: CanvasRenderingContext2D, pose: poseDetection.Pose) => {
     ctx.fillStyle = params.DEFAULT_TRACE_COLOR;
     ctx.strokeStyle = params.DEFAULT_TRACE_COLOR;
     ctx.lineWidth = params.DEFAULT_LINE_WIDTH;
@@ -214,7 +180,7 @@ function App() {
       }
 
     });
-  }
+  }, [lastDetectedPose, selectedKeypoints]);
 
   // Highlight the closest detection to click on webcam
   const highlightClosestDetection = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -250,78 +216,79 @@ function App() {
       }
     }
   }
+
+  // Draw Pose predictions on canvas
+  const drawPoses = React.useCallback((poses: poseDetection.Pose[], videoWidth: number, videoHeight: number) => {
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        canvasRef.current.width = videoWidth;
+        canvasRef.current.height = videoHeight;
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
   
-  // -------------- Exercise UI --------------
-  // Handle picking an exercise to count reps from drop down
-  const chooseDropdownExercise = (e : React.MouseEvent<HTMLAnchorElement, MouseEvent>, exercise:string | null) => {
-    e.preventDefault(); 
-    setCurrExercise(exercise); 
-    setRepCount(0);
-    setHalfwayStatus(false);
-  }
-
-  // Handle checking Push-Up Form
-  const checkPushUpForm = (pose : poseDetection.Pose) => {
-    if (pose.keypoints) {
-
-      // if left and right shoulder are below left and right elbow
-      if ((pose.keypoints[6].y > pose.keypoints[8].y) || 
-          (pose.keypoints[5].y > pose.keypoints[7].y)) {
-        
-        setHalfwayStatus(true); // Concentric was completed
-
-      } else if ((pose.keypoints[6].y < pose.keypoints[8].y) && 
-                (pose.keypoints[5].y < pose.keypoints[7].y) && halfwayStatus) {
-        // if left and right shoulder are above left and right elbow and essentric was completed
-
-        setRepCount((prev) => prev + 1); // increment rep count
-        setHalfwayStatus(false); // Concentric was completed, rep complete
-
+        if (recordingStatus && selectedKeypoints.length > 0 && traceImage) {
+          ctx.putImageData(traceImage, 0, 0);
+        }
+  
+        poses.forEach((pose) => {
+          if (recordingStatus && selectedKeypoints.length > 0) {
+            traceSelectedPoints(ctx, pose);
+            setTraceImage(ctx.getImageData(0, 0, 640, 480));
+          }
+          drawPoseSkeleton(ctx, pose);
+          drawPoseKeypoints(ctx, pose);
+        });
       }
     }
-  }
+  }, [recordingStatus, selectedKeypoints, traceImage, traceSelectedPoints, drawPoseSkeleton, drawPoseKeypoints]);
 
-  // Handle checking Pull-Up Form
-  const checkPullUpForm = (pose : poseDetection.Pose) => {
-    
-    if (pose.keypoints) {
-      // if left and right shoulder are below left and right elbow
-      if ((pose.keypoints[6].y > pose.keypoints[8].y) && 
-          (pose.keypoints[5].y > pose.keypoints[7].y)) {
+  useEffect(() => {
+    // Make predictions on webcam when ready
+    const detect = async () => {
+      if (webcamRef.current && webcamRef.current.video && webcamRef.current.video.readyState === 4) {
+        const video = webcamRef.current.video;
+        const videoWidth = webcamRef.current.video.videoWidth;
+        const videoHeight = webcamRef.current.video.videoHeight;
 
-        setHalfwayStatus(true); // Essentric was completed
+        if (poseDetector && showDetection) {
+          // Make prediction and get position labels 
+          const poses = await poseDetector.estimatePoses(video);
+          
+          // If recording and excerise is selected
+          if (recordingStatus && currExercise) {
+            // Check rep progress based on exercise
+            if (currExercise === "Push-Up") {checkPushUpForm(poses[0]);} 
+            else if (currExercise === "Pull-Up") {checkPullUpForm(poses[0]);} 
+            else if (currExercise === "Squat") {checkSquatForm(poses[0]);}
+          }
 
-      } else if ((pose.keypoints[6].y <= pose.keypoints[8].y) && 
-                (pose.keypoints[5].y <= pose.keypoints[7].y) && halfwayStatus) {
-        // if left and right shoulder are above left and right elbow
+          // Draw predictions on canvas
+          drawPoses(poses, videoWidth, videoHeight);
+          setLastDetectedPose(poses[0]);
+        }
+      }
+    };
 
-        setRepCount((prev) => prev + 1); // increment rep count
-        setHalfwayStatus(false); // Concentric was completed, rep complete
+    const detectionInterval = setInterval(() => {
+      detect();
+    }, 100);
+
+    return () => clearInterval(detectionInterval);
+  }, [poseDetector, showDetection, recordingStatus, currExercise, checkPushUpForm, checkPullUpForm, checkSquatForm, drawPoses]);
+
+  // Toggle Pose Detection
+  const toggleDetection = () => {
+    if (showDetection && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        //clear any previous drawings on canvas
+        ctx.clearRect(0, 0, 640, 480);  
       }
     }
+
+    setShowDetection(!showDetection)
   }
-
-  // Handle checking Squat Form
-  const checkSquatForm = (pose : poseDetection.Pose) => {
-    if (pose.keypoints) {
-
-      // if left and right hip are below left and right knee
-      if ((pose.keypoints[12].y >= pose.keypoints[14].y) || 
-          (pose.keypoints[11].y >= pose.keypoints[13].y)) {
-    
-        setHalfwayStatus(true); // Essentric was completed
-
-      } else if ((pose.keypoints[11].y < pose.keypoints[13].y) && 
-                (pose.keypoints[12].y < pose.keypoints[14].y) && halfwayStatus) {
-        // if left and right hip are above left and right knee and essentric was completed
-        
-        setRepCount((prev) => prev + 1); // increment rep count
-        setHalfwayStatus(false); // Concentric was completed, rep complete
-
-      }
-    }
-  }
-
+  
   // -------------- Camera / Recording --------------
   // Original Example : https://codepen.io/mozmorris/pen/yLYKzyp?editors=0010
 
@@ -348,25 +315,6 @@ function App() {
       }
     }
   }
-  
-  // Handle camera record click
-  const handleStartCaptureClick = React.useCallback(() => {
-    if (webcamRef.current && webcamRef.current.stream) {
-      setRecordingStatus(true);
-      setRecordedVideo([]);
-
-      // Make new recorder and start recording
-      mediaRecorderRef.current = new MediaRecorder(webcamRef.current.stream, {
-        mimeType: "video/webm"
-      });
-      mediaRecorderRef.current.addEventListener(
-        "dataavailable",
-        handleDataAvailable
-      );
-
-      mediaRecorderRef.current.start();
-    }
-  }, [webcamRef, setRecordingStatus, mediaRecorderRef]);
 
   // Concatenate recorded video
   const handleDataAvailable = React.useCallback(
@@ -377,6 +325,25 @@ function App() {
     },
     [setRecordedVideo]
   );
+  
+  // Handle camera record click
+  const handleStartCaptureClick = React.useCallback(() => {
+    if (webcamRef.current && webcamRef.current.stream) {
+      setRecordingStatus(true);
+      setRecordedVideo([]);
+      setTraceImage(null);
+  
+      mediaRecorderRef.current = new MediaRecorder(webcamRef.current.stream, {
+        mimeType: "video/webm"
+      });
+      mediaRecorderRef.current.addEventListener(
+        "dataavailable",
+        handleDataAvailable
+      );
+  
+      mediaRecorderRef.current.start();
+    }
+  }, [handleDataAvailable]); // Add handleDataAvailable to dependencies
 
   // Download recorded video
   const downloadRecording = () => {
@@ -411,76 +378,137 @@ function App() {
       setRecordingStatus(false);
       setHalfwayStatus(false);
     }
-  }, [mediaRecorderRef, webcamRef, setRecordingStatus, setHalfwayStatus]);
+  }, [mediaRecorderRef, setRecordingStatus, setHalfwayStatus]);
 
   return (
-    <div className="min-h-screen bg-zinc-800 flex justify-center items-center">
-      <div className="min-h-screen bg-zinc-800 flex flex-col justify-around">
-        <div className="text-center">
-          <h1 className="text-white text-6xl font-bold">Track My Form</h1>
+    <div className="min-h-screen bg-gradient-to-b from-zinc-900 to-zinc-800 flex justify-center items-center p-8">
+      <div className="w-full max-w-6xl space-y-8">
+        {/* Header Section */}
+        <div className="text-center space-y-4">
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
+            Track My Form
+          </h1>
+          <p className="text-zinc-400">AI-powered exercise form tracking and analysis</p>
         </div>
-        <div className='flex flex-row justify-around items-center'>
-          <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700"
-                  onClick={toggleDetection} >
-            <FaRobot size={20}/>
-            Toggle AI / Clear
+
+        {/* Main Controls */}
+        <div className="flex flex-wrap gap-4 justify-center items-center">
+          <button 
+            className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
+            onClick={toggleDetection}
+          >
+            <FaRobot className="text-blue-400" />
+            <span>Toggle AI</span>
           </button>
-          <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700"
-                  onClick={() => {setShowWebCam(!showWebcam)}} >
-            <FaCamera size={20}/>
-            Toggle Webcam
+
+          <button 
+            className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
+            onClick={() => setShowWebCam(!showWebcam)}
+          >
+            <FaCamera className="text-blue-400" />
+            <span>Toggle Camera</span>
           </button>
-          <div className="dropdown">
-            <div tabIndex={0} role="button" className="btn bg-zinc-500 hover:bg-zinc-700 text-white m-1"> <PiPersonArmsSpread size={20}/> {currExercise ? currExercise : <>Pick Exercise</>}</div>
-            <ul tabIndex={0} className="dropdown-content bg-zinc-500 text-white z-[20] menu p-2 shadow bg-base-100 rounded-box w-52">
-              <li><a href='/' className='hover:bg-zinc-700' onClick={(e) => { chooseDropdownExercise(e, null)}}>No Count</a></li>
-              <li><a href='/' className='hover:bg-zinc-700' onClick={(e) => { chooseDropdownExercise(e,"Push-Up")}}>Push-Up</a></li>
-              <li><a href='/' className='hover:bg-zinc-700' onClick={(e) => { chooseDropdownExercise(e,"Pull-Up")}}>Pull-Up</a></li>
-              <li><a href='/' className='hover:bg-zinc-700' onClick={(e) => { chooseDropdownExercise(e,"Squat")}}>Squat</a></li>
+
+          <div className="dropdown z-10 ">
+            <button className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2">
+              <PiPersonArmsSpread className="text-blue-400" />
+              <span>{currExercise || 'Select Exercise'}</span>
+            </button>
+            <ul className="dropdown-content menu p-2 shadow-lg bg-zinc-700 rounded-lg mt-2 w-52">
+              <li>
+                <button onClick={(e) => chooseDropdownExercise(e, null)} 
+                  className="text-white hover:bg-zinc-600 p-3 rounded transition-all">
+                  No Count
+                </button>
+              </li>
+              {['Push-Up', 'Pull-Up', 'Squat'].map((exercise) => (
+                <li key={exercise}>
+                  <button
+                    onClick={(e) => chooseDropdownExercise(e, exercise)}
+                    className="text-white hover:bg-zinc-600 p-3 rounded transition-all"
+                  >
+                    {exercise}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
-          { currExercise ? <div className='text-white text-xl'>Reps: {repCount}</div>: <></>}
+
+          {currExercise && (
+            <div className="px-6 py-3 bg-zinc-700 rounded-lg">
+              <div className="text-2xl font-bold text-blue-400">{repCount}</div>
+              <div className="text-zinc-400 text-sm">Reps</div>
+            </div>
+          )}
         </div>
-        <div className="m-0 p-0 relative text-center">
-          <Webcam ref={webcamRef} 
-            className="z-5 m-0 p-0 w-[640px] h-[480px] border-dashed border-4 border-sky-50" 
-            screenshotFormat='image/jpeg'/>
-          <canvas ref={canvasRef} 
-            className={`z-10 absolute top-0 left-0 m-0 p-0 w-[640px] h-[480px] border-dashed border-4 
-                      ${showWebcam ? '' : 'bg-black'}
-                      ${recordingStatus ? 'border-red-400' : 'border-sky-50'}`} 
-            onClick={highlightClosestDetection}/>
+
+        {/* Camera Section */}
+        <div className="relative mx-auto w-[640px] h-[480px] rounded-lg overflow-hidden shadow-2xl">
+          <Webcam
+            ref={webcamRef}
+            className="w-full h-full object-cover"
+            screenshotFormat="image/jpeg"
+          />
+          <canvas
+            ref={canvasRef}
+            className={`absolute inset-0 w-full h-full 
+              ${!showWebcam && 'bg-black'}
+              ${recordingStatus ? 'border-2 border-red-400' : 'border-2 border-blue-400'} 
+              rounded-lg transition-all duration-300`}
+            onClick={highlightClosestDetection}
+          />
         </div>
-        
-        <div className="flex flex-row justify-around">
-          {recordingStatus ? 
-            <button className="btn text-red-400 bg-zinc-500 outline-none font-bold hover:bg-zinc-700" 
-              onClick={handleStopCaptureClick}>
-              STOP RECORDING
-              <FaStop  size={20} />
-            </button>
-            :
-            <button className="btn text-white bg-zinc-500 outline-none font-bold hover:bg-zinc-700" 
-              onClick={handleStartCaptureClick}>
-              START RECORDING
-              <BsFillRecordFill size={20} />
-            </button>
-          }
-          <button className={`btn ${(recordedVideo.length > 0) ? '' : 'btn-disabled'} bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700`} 
-                  onClick={downloadRecording}>
-            DOWNLOAD
-            <IoMdDownload size={20}/>
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap gap-4 justify-center">
+          <button
+            className={`btn btn-lg ${
+              recordingStatus 
+                ? 'bg-red-500 hover:bg-red-600' 
+                : 'bg-zinc-700 hover:bg-zinc-600'
+            } text-white transition-all duration-300 space-x-2`}
+            onClick={recordingStatus ? handleStopCaptureClick : handleStartCaptureClick}
+          >
+            {recordingStatus ? (
+              <>
+                <FaStop className="text-white" />
+                <span>Stop Recording</span>
+              </>
+            ) : (
+              <>
+                <BsFillRecordFill className="text-red-500" />
+                <span>Start Recording</span>
+              </>
+            )}
           </button>
-          <button className="btn bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700"
-                  onClick={screenshot} >
-            <RiScreenshot2Line size={20}/>
-            SCREENSHOT
+
+          <button
+            className={`btn btn-lg bg-zinc-700 text-white transition-all duration-300 space-x-2 
+              ${recordedVideo.length === 0 && 'opacity-50 cursor-not-allowed'}`}
+            onClick={downloadRecording}
+            disabled={recordedVideo.length === 0}
+          >
+            <IoMdDownload className="text-blue-400" />
+            <span>Download</span>
           </button>
-          <label htmlFor="file-input" className=" btn btn-disabled bg-zinc-500 outline-none text-white font-bold hover:bg-zinc-700">
-           <FaCloudUploadAlt size={25}/>
-            UPLOAD FILE
-          </label>
-          <input id="file-input" type="file" style={{ display: 'none' }}  />
+
+          <button
+            className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
+            onClick={screenshot}
+          >
+            <RiScreenshot2Line className="text-blue-400" />
+            <span>Screenshot</span>
+          </button>
+
+          <a
+            href="https://github.com/tamzeedq/TrackMyForm"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
+          >
+            <FaGithub className="text-blue-400" />
+            <span>View on GitHub</span>
+          </a>
         </div>
       </div>
     </div>
@@ -488,3 +516,4 @@ function App() {
 }
 
 export default App;
+
