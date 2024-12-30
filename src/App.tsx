@@ -35,7 +35,30 @@ function App() {
   // check if halfway point of rep has been reached
   const [halfwayStatus, setHalfwayStatus] = useState<boolean>(false);
 
+  // Mobile friendly
+  const webcamDimensions = { width: 640, height: 480 };
+  const [isMobile, setIsMobile] = useState(false);
+  const [videoConstraints, setVideoConstraints] = useState({
+    width: 640,
+    height: 480,
+    facingMode: 'user'
+  });
 
+  // -------------- Mobile Friendly --------------
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+      setVideoConstraints(prev => ({
+        ...prev,
+        width: window.innerWidth < 768 ? window.innerWidth - 32 : 640,
+        height: window.innerWidth < 768 ? (window.innerWidth - 32) * 0.75 : 480
+      }));
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // -------------- Exercise UI --------------
   // Handle picking an exercise to count reps from drop down
@@ -381,137 +404,148 @@ function App() {
   }, [mediaRecorderRef, setRecordingStatus, setHalfwayStatus]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-900 to-zinc-800 flex justify-center items-center p-8">
-      <div className="w-full max-w-6xl space-y-8">
-        {/* Header Section */}
-        <div className="text-center space-y-4">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
-            Track My Form
-          </h1>
-          <p className="text-zinc-400">AI-powered exercise form tracking and analysis</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-b from-zinc-900 to-zinc-800 flex justify-center items-center p-4 sm:p-8">
+    <div className="w-full max-w-6xl space-y-4 sm:space-y-8">
+      {/* Header Section */}
+      <div className="text-center space-y-2 sm:space-y-4">
+        <h1 className="text-3xl sm:text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
+          Track My Form
+        </h1>
+        <p className="text-sm sm:text-base text-zinc-400">AI-powered exercise form tracking and analysis</p>
+      </div>
 
-        {/* Main Controls */}
-        <div className="flex flex-wrap gap-4 justify-center items-center">
-          <button 
-            className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
-            onClick={toggleDetection}
-          >
-            <FaRobot className="text-blue-400" />
-            <span>Toggle AI</span>
+      {/* Main Controls */}
+      <div className="flex flex-wrap gap-2 sm:gap-4 justify-center items-center">
+        <button 
+          className="btn btn-sm sm:btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
+          onClick={toggleDetection}
+        >
+          <FaRobot className="text-blue-400" />
+          <span className="text-sm sm:text-base">Toggle AI</span>
+        </button>
+
+        <button 
+          className="btn btn-sm sm:btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
+          onClick={() => setShowWebCam(!showWebcam)}
+        >
+          <FaCamera className="text-blue-400" />
+          <span className="text-sm sm:text-base">Toggle Camera</span>
+        </button>
+
+        <div className="dropdown z-10">
+          <button className="btn btn-sm sm:btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2">
+            <PiPersonArmsSpread className="text-blue-400" />
+            <span className="text-sm sm:text-base">{currExercise || 'Select Exercise'}</span>
           </button>
-
-          <button 
-            className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
-            onClick={() => setShowWebCam(!showWebcam)}
-          >
-            <FaCamera className="text-blue-400" />
-            <span>Toggle Camera</span>
-          </button>
-
-          <div className="dropdown z-10 ">
-            <button className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2">
-              <PiPersonArmsSpread className="text-blue-400" />
-              <span>{currExercise || 'Select Exercise'}</span>
-            </button>
-            <ul className="dropdown-content menu p-2 shadow-lg bg-zinc-700 rounded-lg mt-2 w-52">
-              <li>
-                <button onClick={(e) => chooseDropdownExercise(e, null)} 
-                  className="text-white hover:bg-zinc-600 p-3 rounded transition-all">
-                  No Count
+          <ul className="dropdown-content menu p-2 shadow-lg bg-zinc-700 rounded-lg mt-2 w-40 sm:w-52">
+            <li>
+              <button onClick={(e) => chooseDropdownExercise(e, null)} 
+                className="text-sm sm:text-base text-white hover:bg-zinc-600 p-2 sm:p-3 rounded transition-all">
+                No Count
+              </button>
+            </li>
+            {['Push-Up', 'Pull-Up', 'Squat'].map((exercise) => (
+              <li key={exercise}>
+                <button
+                  onClick={(e) => chooseDropdownExercise(e, exercise)}
+                  className="text-sm sm:text-base text-white hover:bg-zinc-600 p-2 sm:p-3 rounded transition-all"
+                >
+                  {exercise}
                 </button>
               </li>
-              {['Push-Up', 'Pull-Up', 'Squat'].map((exercise) => (
-                <li key={exercise}>
-                  <button
-                    onClick={(e) => chooseDropdownExercise(e, exercise)}
-                    className="text-white hover:bg-zinc-600 p-3 rounded transition-all"
-                  >
-                    {exercise}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            ))}
+          </ul>
+        </div>
+
+        {currExercise && (
+          <div className="px-4 sm:px-6 py-2 sm:py-3 bg-zinc-700 rounded-lg">
+            <div className="text-xl sm:text-2xl font-bold text-blue-400">{repCount}</div>
+            <div className="text-xs sm:text-sm text-zinc-400">Reps</div>
           </div>
+        )}
+      </div>
 
-          {currExercise && (
-            <div className="px-6 py-3 bg-zinc-700 rounded-lg">
-              <div className="text-2xl font-bold text-blue-400">{repCount}</div>
-              <div className="text-zinc-400 text-sm">Reps</div>
-            </div>
+      {/* Camera Section */}
+      <div 
+        className="relative rounded-lg overflow-hidden shadow-2xl mx-auto w-full"
+        style={{
+          maxWidth: isMobile ? '100%' : '640px',
+          height: isMobile ? `${videoConstraints.height}px` : '480px'
+        }}
+      >
+        <Webcam
+          ref={webcamRef}
+          className="w-full h-full object-cover"
+          screenshotFormat="image/jpeg"
+          videoConstraints={{
+            width: webcamDimensions.width,
+            height: webcamDimensions.height,
+            facingMode: "user"
+          }}
+        />
+        <canvas
+          ref={canvasRef}
+          className={`absolute inset-0 w-full h-full 
+            ${!showWebcam && 'bg-black'}
+            ${recordingStatus ? 'border-2 border-red-400' : 'border-2 border-blue-400'} 
+            rounded-lg transition-all duration-300`}
+          onClick={highlightClosestDetection}
+        />
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-wrap gap-2 sm:gap-4 justify-center">
+        <button
+          className={`btn btn-sm sm:btn-lg ${
+            recordingStatus 
+              ? 'bg-red-500 hover:bg-red-600' 
+              : 'bg-zinc-700 hover:bg-zinc-600'
+          } text-white transition-all duration-300 space-x-2`}
+          onClick={recordingStatus ? handleStopCaptureClick : handleStartCaptureClick}
+        >
+          {recordingStatus ? (
+            <>
+              <FaStop className="text-white" />
+              <span className="text-sm sm:text-base">Stop</span>
+            </>
+          ) : (
+            <>
+              <BsFillRecordFill className="text-red-500" />
+              <span className="text-sm sm:text-base">Record</span>
+            </>
           )}
-        </div>
+        </button>
 
-        {/* Camera Section */}
-        <div className="relative mx-auto w-[640px] h-[480px] rounded-lg overflow-hidden shadow-2xl">
-          <Webcam
-            ref={webcamRef}
-            className="w-full h-full object-cover"
-            screenshotFormat="image/jpeg"
-          />
-          <canvas
-            ref={canvasRef}
-            className={`absolute inset-0 w-full h-full 
-              ${!showWebcam && 'bg-black'}
-              ${recordingStatus ? 'border-2 border-red-400' : 'border-2 border-blue-400'} 
-              rounded-lg transition-all duration-300`}
-            onClick={highlightClosestDetection}
-          />
-        </div>
+        <button
+          className={`btn btn-sm sm:btn-lg bg-zinc-700 text-white transition-all duration-300 space-x-2 
+            ${recordedVideo.length === 0 && 'opacity-50 cursor-not-allowed'}`}
+          onClick={downloadRecording}
+          disabled={recordedVideo.length === 0}
+        >
+          <IoMdDownload className="text-blue-400" />
+          <span className="text-sm sm:text-base">Download</span>
+        </button>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-4 justify-center">
-          <button
-            className={`btn btn-lg ${
-              recordingStatus 
-                ? 'bg-red-500 hover:bg-red-600' 
-                : 'bg-zinc-700 hover:bg-zinc-600'
-            } text-white transition-all duration-300 space-x-2`}
-            onClick={recordingStatus ? handleStopCaptureClick : handleStartCaptureClick}
-          >
-            {recordingStatus ? (
-              <>
-                <FaStop className="text-white" />
-                <span>Stop Recording</span>
-              </>
-            ) : (
-              <>
-                <BsFillRecordFill className="text-red-500" />
-                <span>Start Recording</span>
-              </>
-            )}
-          </button>
+        <button
+          className="btn btn-sm sm:btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
+          onClick={screenshot}
+        >
+          <RiScreenshot2Line className="text-blue-400" />
+          <span className="text-sm sm:text-base">Screenshot</span>
+        </button>
 
-          <button
-            className={`btn btn-lg bg-zinc-700 text-white transition-all duration-300 space-x-2 
-              ${recordedVideo.length === 0 && 'opacity-50 cursor-not-allowed'}`}
-            onClick={downloadRecording}
-            disabled={recordedVideo.length === 0}
-          >
-            <IoMdDownload className="text-blue-400" />
-            <span>Download</span>
-          </button>
-
-          <button
-            className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
-            onClick={screenshot}
-          >
-            <RiScreenshot2Line className="text-blue-400" />
-            <span>Screenshot</span>
-          </button>
-
-          <a
-            href="https://github.com/tamzeedq/TrackMyForm"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
-          >
-            <FaGithub className="text-blue-400" />
-            <span>View on GitHub</span>
-          </a>
-        </div>
+        <a
+          href="https://github.com/tamzeedq/TrackMyForm"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-sm sm:btn-lg bg-zinc-700 text-white hover:bg-zinc-600 transition-all duration-300 space-x-2"
+        >
+          <FaGithub className="text-blue-400" />
+          <span className="text-sm sm:text-base">GitHub</span>
+        </a>
       </div>
     </div>
+  </div>
   );
 }
 
